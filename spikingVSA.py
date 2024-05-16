@@ -43,24 +43,18 @@ def complex_similarity(v, S):
 
     max_sim = -1000.
     max_sim_i = -1
-    #mean_sim = 0.
     sims = []
     for m in range(M):
-        #m_sim = abs(sum(v*conj(S[m]))) / linalg.norm(v) / linalg.norm(S[m])
         if abs(linalg.norm(v)) < 1.e-8 or abs(linalg.norm(S[m])) < 1.e-8:
-            #print(abs(linalg.norm(v)), abs(linalg.norm(S[m])))
             m_sim = -1000
         else:
             m_sim = real(sum(v*conj(S[m]))) / linalg.norm(v) / linalg.norm(S[m])
-        #print(f'{m}: {m_sim}')
-        #mean_sim += m_sim
         if m_sim > max_sim:
             max_sim = m_sim
             max_sim_i = m
         sims.append(m_sim)
-    #print(f'Closest pattern is {max_sim_i} with similarity {max_sim}')
-    #print(f'Average similarity = {mean_sim/M}')
     return max_sim_i, array(sims)
+
 
 def complex_similarity_2D(v, S, samp0, samp1):
     '''
@@ -88,7 +82,6 @@ def complex_similarity_2D(v, S, samp0, samp1):
     return array(allfx)
 
 
-
 # Helper functions
 def spiking_similarity(pop, S, start_time):
     '''
@@ -109,67 +102,6 @@ def spiking_similarity(pop, S, start_time):
     # Convert a spike train back to a phase vector
     v = pop.spikes2complex(start_time)
     return complex_similarity(v, S)
-
-
-def phase0(v):
-    return mod(angle(v)+pi, 2*pi) - pi
-
-
-def decode_x(pop, S, start_time, x0=0.):
-    '''
-     x = decode_x(pop, S, start_time, x0=0)
-
-     Estimates the value of x that was the exponent when the
-     population pop was raised to x.
-     That is, v = S**x
-     where S is a complex vector, and v is a complex vector that
-     represents the phases of the spikes in this population.
-    '''
-    # We will focus on ds.S[0]
-    v = pop.spikes2complex(start_time=start_time)
-    v_phases = phase0(v)
-    # Phases are in the range [-pi, pi]
-    phases = phase0(S)
-    sidx = argsort(phases)
-    # Create couplings between adjacent elements...
-    couplings = list(zip(sidx[:-1], sidx[1:]))
-    # ... as well as elements one-removed (not necessary).
-    couplings.extend(zip(sidx[:-2], sidx[2:]))
-    # ... as well as elements two-removed (not necessary).
-    couplings.extend(zip(sidx[:-3], sidx[3:]))
-
-    # Record the Delta-A differences for the couplings
-    DeltaA = array([phases[c[0]]-phases[c[1]] for c in couplings])
-    DeltaA = array([phases[c[0]]-phases[c[1]] for c in couplings])
-
-    # Get the phase differences for the couplings.
-    #DeltaPhi = array([angle(v[c[0]]*conj(v[c[1]])) for c in couplings])
-    DeltaPhi = array([angle(v[c[0]]*conj(v[c[1]])) for c in couplings])
-
-    x = x0             # initial guess
-    kappa = 0.1        # gradient descent step size
-    max_iters = 100
-
-    for iter in range(1,max_iters):
-        print(f'Iter {iter}: x = {x}')
-
-        # Compute residual
-        resid = DeltaPhi - DeltaA * x
-
-        # Ignore outliers (stupid phase-wrapping!!)
-        outliers = abs(resid)>1./iter
-        resid[outliers] = 0.
-
-        # Update x using gradient descent on least squares
-        x_increment = kappa * real(DeltaA @ resid)
-        x += x_increment
-
-        # If increments are small, stop!
-        if abs(x_increment)<0.001:
-            break
-
-    print(f'Final estimate of x = {x}')
-    return x
 
 
 def spatial_similarity(pop, S, xvals, start_time=0.):
@@ -196,6 +128,10 @@ def spatial_similarity(pop, S, xvals, start_time=0.):
     max_i, sims = spiking_similarity(pop, Sx, start_time=start_time)
 
     return max_i, sims
+
+
+def phase0(v):
+    return mod(angle(v)+pi, 2*pi) - pi
 
 
 #==================
@@ -232,7 +168,6 @@ class SpikingPhasorNet():
         for bro in pop.br:
             if True: #not isinstance(bro, StateMonitor):
                 self.br.add(bro)
-            # self.br.add(bro)
         self.symbols.update(pop.symbols)  # include dict of symbols
 
     def connect(self, pre, post, W=None, delays=0, phases=None):
@@ -297,8 +232,6 @@ class SpikingPhasorNet():
           preB spikes at 0.25
           post spikes at -0.15, or T-0.15, where T is the period
         '''
-        # I originally had ConA(preA) and ConB(preB), but that turned
-        # out to be the opposite of what I wanted. So I swapped them.
         synA = PhaseDiffConnectionA(preA, post)
         synB = PhaseDiffConnectionB(preB, post)
         self.br.add(synA.br)
@@ -310,7 +243,6 @@ class SpikingPhasorNet():
         syn = PhaseMultConnection(pre, post, v)
         self.br.add(syn.br)
         self.syns.append(syn)
-        #self.symbols.update(syn.symbols)
 
     def integrate(self, pre, post, w=1.):
         syn = IntegratorConnection(pre, post, w=w)
@@ -319,12 +251,10 @@ class SpikingPhasorNet():
 
     def connect_to_lmu(self, pre, lmu):
         for k,m in enumerate(lmu.m):
-            #self.integrate(pre, m, lmu.B[k]/lmu.freq)
             self.integrate(pre, m, lmu.Bd[k])
 
         for c,mpre in enumerate(lmu.m):
             for r,mpost in enumerate(lmu.m):
-                #self.integrate(mpre, mpost, lmu.A[r,c]/lmu.freq)
                 self.integrate(mpre, mpost, lmu.Ad[r,c])
 
     def reset(self, pre, post):
@@ -353,7 +283,6 @@ class SpikingPhasorNet():
                 total_N += p.spike_raster(offset=offset+total_N, color=color)
             else:
                 total_N += p.spike_raster(offset=offset+total_N, **kwargs)
-
 
 
 #==================
@@ -390,10 +319,8 @@ class SpikingPop():
             blah = vstack((sp[k], sp[k]))
             if color is not None:
                 plot(blah, y, color=color, **kwargs);
-                #plot(sp[k], [k+offset]*len(sp[k]), '.', color=color);
             else:
                 plot(blah, y, **kwargs);
-                #plot(sp[k], [k+offset]*len(sp[k]), '.');
         xlabel('Time (s)');
         ylabel('Neuron Index');
         return self.N
@@ -424,54 +351,6 @@ class SpikingPop():
             fx.append(xvals[max_i])
         return array(fx), tvals
 
-    def decode_x(self, S, start_time):
-        '''
-         x = sp.decode_x(S, start_time)
-
-         Estimates the value of x that was the exponent when this
-         layer was raised to x.
-         That is, v = S**x
-         where S is a complex vector, and v is a complex vector that
-         represents the phases of the spikes in this population.
-        '''
-        # We will focus on ds.S[0]
-        v = self.spikes2complex(start_time=start_time)
-        sidx = argsort(angle(S))
-        # Create couplings between adjacent elements...
-        couplings = list(zip(sidx[:-1], sidx[1:]))
-        # ... as well as elements one-removed (not necessary).
-        couplings.extend(zip(sidx[:-2], sidx[2:]))
-
-        # Record the Delta-A differences for the couplings
-        DeltaA = array([angle(S[c[0]])-angle(S[c[1]]) for c in couplings])
-
-        # Get the phase differences for the couplings.
-        DeltaPhi = array([angle(v[c[0]]*conj(v[c[1]])) for c in couplings])
-
-        x = 0.             # initial guess
-        kappa = 0.1        # gradient descent step size
-        max_iters = 100
-
-        for iter in range(1,max_iters):
-            print(f'Iter {iter}: x = {x}')
-
-            # Compute residual
-            resid = DeltaPhi - DeltaA * x
-
-            # Ignore outliers (stupid phase-wrapping!!)
-            outliers = abs(resid)>1./iter
-            resid[outliers] = 0.
-
-            # Update x using gradient descent on least squares
-            x_increment = kappa * real(DeltaA @ resid)
-            x += x_increment
-
-            # If increments are small, stop!
-            if abs(x_increment)<0.001:
-                break
-
-        print(f'Final estimate of x = {x}')
-        return x
 
     def spikes2complex(self, start_time):
         '''
@@ -642,6 +521,7 @@ class ResetConnection():
         self.br = Synapses(preG, postG, on_pre=syn_on_pre, method='euler')
         self.br.connect()
 
+
 class IntegratorConnection():
     def __init__(self, pre, post, w=1.):
         syn_eqs = 'w : 1'
@@ -651,6 +531,7 @@ class IntegratorConnection():
         self.br = Synapses(pre.G, post.G, syn_eqs, on_pre=syn_on_pre, method='euler')
         self.br.connect(j='i')
         self.br.w = w
+
 
 class SPIntegrator(SpikingPop):
     def __init__(self, N=64, freq=5.):
@@ -693,111 +574,106 @@ class SPIntegrator(SpikingPop):
         self.G.run_on_event('wrap', wrap_reset)
         self.G.x = 0.
         self.G.p = 0.
-        # if C is not None:
-        #     v = abs(C)
-        #     norm_phase = mod(angle(C)/2./pi, 1)
-        #     self.G.p = 1. - norm_phase
-
         self.stmon = StateMonitor(self.G, True, record=True)
         self.spmon = SpikeMonitor(self.G)
         self.br = [self.G, self.stmon, self.spmon]
         self.pops = [self.G]
 
 
-# TPAM
-class TPAMConnection():
-    def __init__(self, pre, post):
-        self.pre = pre
-        self.post = post
+# # TPAM
+# class TPAMConnection():
+#     def __init__(self, pre, post):
+#         self.pre = pre
+#         self.post = post
 
 
-        syn_eqs = '''
-            mag_v : 1
-            mag_u : 1
-            '''
-        syn_on_pre = '''
-            Vs_post += mag_v
-            Us_post += mag_u
-            '''
+#         syn_eqs = '''
+#             mag_v : 1
+#             mag_u : 1
+#             '''
+#         syn_on_pre = '''
+#             Vs_post += mag_v
+#             Us_post += mag_u
+#             '''
 
-        # Input connections
-        self.br = Synapses(pre.G, post.G,
-                            syn_eqs, on_pre=syn_on_pre,
-                            method='euler')
-        self.br.connect(j='i')
-        self.br.mag_u = 0.
-        self.br.mag_v = 0.5
+#         # Input connections
+#         self.br = Synapses(pre.G, post.G,
+#                             syn_eqs, on_pre=syn_on_pre,
+#                             method='euler')
+#         self.br.connect(j='i')
+#         self.br.mag_u = 0.
+#         self.br.mag_v = 0.5
 
-class TPAMPop(SpikingPop):
-    def __init__(self, targets=None, freq=5.):
-        '''
-         net = TPAMLayer(targets, freq=5.)
+# class TPAMPop(SpikingPop):
+#     def __init__(self, targets=None, freq=5.):
+#         '''
+#          net = TPAMLayer(targets, freq=5.)
 
-         Creates a recurrent TPAM layer for a given set of phasor targets.
+#          Creates a recurrent TPAM layer for a given set of phasor targets.
 
-         Inputs:
-          targets  (M,N) array of target M N-dim phasor patterns
-          freq     baseline frequency
-        '''
-        self.freq = freq  # Baseline frequency
-        self.period = 1./self.freq
-        self.S = targets
-        self.M, self.N = self.S.shape
-        self.Ks = sum(abs(self.S[0,:])>1.e-5)
+#          Inputs:
+#           targets  (M,N) array of target M N-dim phasor patterns
+#           freq     baseline frequency
+#         '''
+#         self.freq = freq  # Baseline frequency
+#         self.period = 1./self.freq
+#         self.S = targets
+#         self.M, self.N = self.S.shape
+#         self.Ks = sum(abs(self.S[0,:])>1.e-5)
 
-        # W has phase shifts in radians
-        W = self.S.T@np.conj(self.S) / self.Ks  # ds.S = pvec.T from Paxon's code
-        self.W = W
-        for k in range(len(W)):
-            W[k,k] = 0.
+#         # W has phase shifts in radians
+#         W = self.S.T@np.conj(self.S) / self.Ks  # ds.S = pvec.T from Paxon's code
+#         self.W = W
+#         for k in range(len(W)):
+#             W[k,k] = 0.
 
-        self.symbols = {'theta': self.freq}
+#         self.symbols = {'theta': self.freq}
 
-        eqs = Equations('''
-            dVs/dt = (-2*pi*theta*Us - 0.4*Vs + I_ext) * hertz : 1
-            dUs/dt = ( 2*pi*theta*Vs - 0.4*Us) * hertz : 1
-            I_ext : 1
-            ''')
+#         eqs = Equations('''
+#             dVs/dt = (-2*pi*theta*Us - 0.4*Vs + I_ext) * hertz : 1
+#             dUs/dt = ( 2*pi*theta*Vs - 0.4*Us) * hertz : 1
+#             I_ext : 1
+#             ''')
 
-        syn_eqs = '''
-            mag_v : 1
-            mag_u : 1
-            '''
-        syn_on_pre = '''
-            Vs_post += mag_v
-            Us_post += mag_u
-            '''
+#         syn_eqs = '''
+#             mag_v : 1
+#             mag_u : 1
+#             '''
+#         syn_on_pre = '''
+#             Vs_post += mag_v
+#             Us_post += mag_u
+#             '''
 
-        # Phasor neuron group
-        self.G = NeuronGroup(self.N,
-                             model=eqs,
-                             threshold='Vs>0.9 and Us>0',
-                             reset='Vs=0.7',
-                             refractory=0.75*1./self.freq*second,
-                             method='euler')
-        self.G.Vs = 0.3*ones(self.N)
-        self.G.Us = 0.0*ones(self.N)
-        self.G.I_ext = 0.
+#         # Phasor neuron group
+#         self.G = NeuronGroup(self.N,
+#                              model=eqs,
+#                              threshold='Vs>0.9 and Us>0',
+#                              reset='Vs=0.7',
+#                              refractory=0.75*1./self.freq*second,
+#                              method='euler')
+#         self.G.Vs = 0.3*ones(self.N)
+#         self.G.Us = 0.0*ones(self.N)
+#         self.G.I_ext = 0.
 
-        # Recurrent connections
-        self.G2G = Synapses(self.G, self.G, syn_eqs, on_pre=syn_on_pre, method='euler')
-        i_pre, j_post = meshgrid(range(self.N), range(self.N), indexing='ij')
-        self.G2G.connect(i=i_pre.flatten(), j=j_post.flatten())
-        syn_abs = abs(W.T).flatten()
-        syn_thresh = 0.1 / (2.*self.N)**0.5
-        syn_idxs = where(syn_abs <= syn_thresh)[0]  # From Frady
-        syn_abs[syn_idxs] = 0.
-        syn_phase = mod(angle(W.T).flatten(), 2.*pi)  # can only deal with positive delays
-        syn_g = 0.3
-        self.G2G.mag_v = syn_g * syn_abs
-        self.G2G.mag_u = 0. #syn_g * syn_abs * sin(syn_phase) * VU_factor
-        self.G2G.delay = syn_phase/2./pi * self.period * second
+#         # Recurrent connections
+#         self.G2G = Synapses(self.G, self.G, syn_eqs, on_pre=syn_on_pre, method='euler')
+#         i_pre, j_post = meshgrid(range(self.N), range(self.N), indexing='ij')
+#         self.G2G.connect(i=i_pre.flatten(), j=j_post.flatten())
+#         syn_abs = abs(W.T).flatten()
+#         syn_thresh = 0.1 / (2.*self.N)**0.5
+#         syn_idxs = where(syn_abs <= syn_thresh)[0]  # From Frady
+#         syn_abs[syn_idxs] = 0.
+#         syn_phase = mod(angle(W.T).flatten(), 2.*pi)  # can only deal with positive delays
+#         syn_g = 0.3
+#         self.G2G.mag_v = syn_g * syn_abs
+#         self.G2G.mag_u = 0. #syn_g * syn_abs * sin(syn_phase) * VU_factor
+#         self.G2G.delay = syn_phase/2./pi * self.period * second
 
-        # Monitors
-        self.spmon = SpikeMonitor(self.G)
-        self.stmon = StateMonitor(self.G, True, record=True)
-        self.br = [self.G, self.G2G, self.spmon, self.stmon]
-        self.pops = [self.G]
+#         # Monitors
+#         self.spmon = SpikeMonitor(self.G)
+#         self.stmon = StateMonitor(self.G, True, record=True)
+#         self.br = [self.G, self.G2G, self.spmon, self.stmon]
+#         self.pops = [self.G]
 
 
 
@@ -824,15 +700,13 @@ class PhaseMultConnection():
         '''
         self.id = random.randint(1000)
         self.alpha_id = f'alpha{self.id}'
-        syn_eqs = f'{self.alpha_id} : 1' # = v{self.id} : 1'
+        syn_eqs = f'{self.alpha_id} : 1'
         syn_on_pre = f'''
             th_post = ((x_post*{self.alpha_id}+0.5) % 1) - 0.5
             '''
         self.br = Synapses(pre.G, post.G, syn_eqs, on_pre=syn_on_pre, method='euler')
         self.br.connect(j='i')
         setattr(self.br, self.alpha_id, v)
-        #self.br.alpha1 = v
-        #self.symbols = {f'v{self.id}': v}
         self.stmon = StateMonitor(self.br, True, record=True)
 
 class PhaseMultPop(SpikingPop):
@@ -872,23 +746,6 @@ class PhaseMultPop(SpikingPop):
             th = 1.
             '''
 
-        # self.G = NeuronGroup(self.N,
-        #                     model=eqs,
-        #                     threshold='p>=pth and abs(pth)<=0.5',
-        #                     reset=reset_eqs,
-        #                     refractory=1./self.freq/2.*ms,
-        #                     events={'wrap': 'x>=0.5', 'dormant': 'abs(b*pth)>0.5'},
-        #                     method='euler')
-        # self.G = NeuronGroup(self.N,
-        #                     model=eqs,
-        #                     threshold='p>=pth',
-        #                     reset=reset_eqs,
-        #                     refractory=1./self.freq/2.*ms,
-        #                     events={'wrap': 'x>=0.5',
-        #                             'pdown': 'pth>0.5',
-        #                             'pup': 'pth<-0.5',
-        #                             'dormant': 'abs(b*pth)>0.5'},
-        #                     method='euler')
         self.G = NeuronGroup(self.N,
                             model=eqs,
                             threshold='x>=th and refr==0',
@@ -905,7 +762,6 @@ class PhaseMultPop(SpikingPop):
         self.G.run_on_event('wrap', wrap_reset)
         self.G.run_on_event('pdown', pwrap_down)
         self.G.run_on_event('pup', pwrap_up)
-        # self.G.run_on_event('dormant', go_dormant)
 
         self.stmon = StateMonitor(self.G, True, record=True)
         self.spmon = SpikeMonitor(self.G)
@@ -964,66 +820,6 @@ class PhaseSumPop(SpikingPop):
         self.spmon = SpikeMonitor(self.G)
         self.br = [self.G, self.stmon, self.spmon]
         self.pops = [self.G]
-
-
-
-
-# Bundling
-class PhaseBundleConnection():
-    def __init__(self, pre, post):
-        syn_eqs = '''
-            w : 1
-            '''
-        syn_on_pre = '''
-            a_post *= tog_post
-            b_post *= (1-tog_post)
-            tog_post = 1 - tog_post
-            '''
-        self.br = Synapses(pre.G, post.G, syn_eqs, on_pre=syn_on_pre, method='euler')
-        self.br.connect(j='i')
-
-class PhaseBundlePop(SpikingPop):
-    def __init__(self, N=64, freq=5.):
-        super().__init__()
-        self.N = N
-        self.freq = freq
-        self.period = 1./self.freq
-        self.symbols = {'tau': 1./self.freq}
-
-        eqs = Equations('''
-            dx/dt = 1. / tau * hertz : 1
-            da/dt = adot / tau * hertz : 1
-            db/dt = bdot / tau * hertz : 1
-            adot : 1
-            bdot : 1
-            tog : 1
-            ''')
-
-        reset_eqs = '''
-            '''
-
-        wrap_reset = '''
-            x = 0.
-            '''
-
-        self.G = NeuronGroup(self.N,
-                            model=eqs,
-                            threshold='(a>=(1-b) and a<=0.25) or (b>=(1-a) and b<=0.25)',
-                            refractory=0.8*1./self.freq*second,
-                            events={'wrap': 'x>=1'},
-                            method='euler')
-        self.G.a = 0.
-        self.G.b = 0.
-        self.G.adot = 1.
-        self.G.bdot = 1.
-        self.G.tog = 0
-        self.G.run_on_event('wrap', wrap_reset)
-
-        self.stmon = StateMonitor(self.G, True, record=True)
-        self.spmon = SpikeMonitor(self.G)
-        self.br = [self.G, self.stmon, self.spmon]
-        self.pops = [self.G]
-
 
 
 # Unbinding
@@ -1105,75 +901,7 @@ class PhaseDiffPop(SpikingPop):
         self.pops = [self.G]
 
 
-
-
-# Coupling
-class Coupling2Connection():
-    def __init__(self, pre, post):
-        syn_eqs = '''
-        w : 1
-        '''
-        syn_on_pre = '''
-        a_post -= 1
-        b_post -= 1
-        q_post += p_post
-        p_post = 0
-        '''
-        self.br = Synapses(pre.G, post.G, syn_eqs, on_pre=syn_on_pre, method='euler')
-
-class Coupling2Pop(SpikingPop):
-    '''
-     pop = Coupling2Pop(N=64, freq=5.)
-
-     Creates a population of neurons that do phase coupling.
-    '''
-    def __init__(self, N=64, freq=5.):
-        super().__init__()
-        self.N = N
-        self.freq = freq
-        self.period = 1./self.freq
-        self.symbols = {'mymax': mymax, 'mymin': mymin, 'tau': 1./self.freq}
-
-        eqs = Equations('''
-            dx/dt = 1. / tau * hertz : 1
-            dp/dt = mymax(a, 0.) / tau * hertz : 1
-            dq/dt = mymin(b, 0.) / tau * hertz : 1
-            a : 1
-            b : 1
-            ''')
-
-        reset_eqs = '''
-            q = 0.0001
-            b = 1
-            '''
-
-        wrap_reset = '''
-            x = 0.
-            p = 0.
-            a = 1.
-            '''
-
-        self.G = NeuronGroup(self.N,
-                            model=eqs,
-                            threshold='q<0',
-                            reset=reset_eqs,
-                            refractory=1./self.freq/2.*ms,
-                            events={'wrap': 'x>=1'},
-                            method='euler')
-        self.G.p = 0.
-        self.G.q = 0.
-        self.G.a = 1.
-        self.G.b = 1.
-        self.G.run_on_event('wrap', wrap_reset)
-
-        self.stmon = StateMonitor(self.G, True, record=True)
-        self.spmon = SpikeMonitor(self.G)
-        self.br = [self.G, self.stmon, self.spmon]
-        self.pops = [self.G]
-
-
-
-# Hopfield
+# Hopfield Clean-Up Memory
 class SpikingModernHopfield(SpikingPop):
     def __init__(self, targets, freq=5.):
         '''
@@ -1274,24 +1002,14 @@ class SpikingModernHopfield(SpikingPop):
         self.br = [self.G, self.H, self.G2H, self.H2G, self.H2H, self.Gspmon, self.Hspmon, self.Gstmon, self.Hstmon]
         self.pops = [self.G, self.H]
 
-
     def total_neurons(self):
         return self.N + self.M
 
-
     def spike_raster(self, offset=0, color=None, **kwargs):
-        #figure()
-
-        #sp = self.Gspmon.spike_trains()
         n_rasters = self.spike_raster_G(offset=offset, color=color)
-
         offset += n_rasters
-
-        #sp = self.Hspmon.spike_trains()
         m_rasters = self.spike_raster_H(offset=offset, color=color)
-
         return n_rasters + m_rasters
-
 
     def spike_raster_G(self, offset=0, color=None, **kwargs):
         sp = self.Gspmon.spike_trains()
@@ -1304,7 +1022,6 @@ class SpikingModernHopfield(SpikingPop):
         return m_rasters
 
     def _spike_raster(self, sp, offset=0, color=None, **kwargs):
-        #figure()
         N = len(sp)  # number of neurons
         y_range = [0, N-1]
         loc = offset + linspace(0, N-1, N)
@@ -1318,14 +1035,11 @@ class SpikingModernHopfield(SpikingPop):
             blah = vstack((sp[k], sp[k]))
             if color is not None:
                 plot(blah, y, color=color, **kwargs);
-                #plot(sp[k], [k+offset]*len(sp[k]), '.', color=color);
             else:
                 plot(blah, y, **kwargs);
-                #plot(sp[k], [k+offset]*len(sp[k]), '.');
         xlabel('Time (s)');
         ylabel('Neuron Index');
         return N
-
 
     def spikes2complex(self, start_time):
         '''
@@ -1344,15 +1058,12 @@ class SpikingModernHopfield(SpikingPop):
             for s in st:
                 if s>=start_time and s<start_time+self.period:
                     spike_time.append(s)
-            #if len(spike_time)>1:
-            #    print(f'Oops, found {len(spike_time)} spikes in the time [{start_time},{start_time+self.period}]')
             if len(spike_time)>0:
                 delay = 2j*pi*(spike_time[0]-start_time)/self.period
                 v.append(exp(delay))
             else:
                 v.append(0j)
         return v
-
 
 # Simple relay
 class SpikingRelayPop(SpikingPop):
@@ -1448,198 +1159,5 @@ class SpikingPhasorPop(SpikingPop):
         self.spmon = SpikeMonitor(self.G)
         self.br = [self.G, self.stmon, self.spmon]
         self.pops = [self.G]
-
-
-# class oldPhaseSumPop(SpikingPop):
-#     def __init__(self, N=64, freq=5.):
-#         super().__init__()
-#         self.N = N
-#         self.freq = freq
-#         self.period = 1./self.freq
-#         self.symbols = {'mymax': mymax, 'mymin': mymin, 'tau': 1./self.freq}
-
-#         # eqs = Equations('''
-#         #     dx/dt = ( 1. / tau + 0.1*sqrt(second)*xi ) * hertz : 1
-#         #     dp/dt = mymax(pdot, 0.) / tau * hertz : 1
-#         #     dq/dt = mymin(qdot, 0.) / tau * hertz : 1
-#         #     pdot : 1
-#         #     qdot : 1
-#         #     ''')
-#         eqs = Equations('''
-#             dx/dt = ( 1. / tau ) * hertz : 1
-#             dp/dt = mymax(pdot, 0.) / tau * hertz : 1
-#             dq/dt = mymin(qdot, 0.) / tau * hertz : 1
-#             pdot : 1
-#             qdot : 1
-#             ''')
-
-#         reset_eqs = '''
-#             q = 0.0001
-#             qdot = 1
-#             '''
-
-#         wrap_reset = '''
-#             x = 0.
-#             p = 0.
-#             pdot = 1.
-#             qdot = sign(qdot+0.001)
-#             q *= (1-qdot)/2
-#             '''
-
-#         self.G = NeuronGroup(self.N,
-#                             model=eqs,
-#                             threshold='q<0',
-#                             reset=reset_eqs,
-#                             refractory=0.*1./self.freq/2.*ms,
-#                             events={'wrap': 'x>=1'},
-#                             method='euler')
-#         self.G.p = 0.
-#         self.G.q = 0.
-#         self.G.pdot = 1.
-#         self.G.qdot = 1.
-#         self.G.run_on_event('wrap', wrap_reset)
-
-#         self.stmon = StateMonitor(self.G, True, record=True)
-#         self.spmon = SpikeMonitor(self.G)
-#         self.br = [self.G, self.stmon, self.spmon]
-#         self.pops = [self.G]
-
-
-# class PhaseDiffPop(SpikingPop):
-#     '''
-#      Computes spiketime(A) - spiketime(B)
-#      That is, it measures the time that lapses after B spikes, until A spikes.
-#      The spike from A might not arrive until the next cycle.
-#     '''
-#     def __init__(self, N=64, freq=5.):
-#         super().__init__()
-#         self.N = N
-#         self.freq = freq
-#         self.period = 1./self.freq
-#         self.symbols = {'tau': 1./self.freq}
-
-#         eqs = Equations('''
-#             dx/dt = 1. / tau * hertz : 1
-#             dp/dt = pdot / tau * hertz : 1
-#             dq/dt = qdot / tau * hertz : 1
-#             pdot : 1
-#             qdot : 1
-#             Dphi : 1
-#             ''')
-
-#         reset_eqs = '''
-#             q = 0.
-#             qdot = 0.
-#             '''
-
-#         wrap_reset = '''
-#             x = 0.
-#             q = 0.
-#             qdot = 1.
-#             '''
-
-#         self.G = NeuronGroup(self.N,
-#                             model=eqs,
-#                             threshold='q>Dphi',
-#                             reset=reset_eqs,
-#                             refractory=1./self.freq/2.*ms,
-#                             events={'wrap': 'x>=1'},
-#                             method='euler')
-#         self.G.x = 0.
-#         self.G.p = 0.
-#         self.G.q = 0.
-#         self.G.pdot = 0.
-#         self.G.qdot = 1.
-#         self.G.Dphi = 1.1
-#         self.G.run_on_event('wrap', wrap_reset)
-
-#         self.stmon = StateMonitor(self.G, True, record=True)
-#         self.spmon = SpikeMonitor(self.G)
-#         self.br = [self.G, self.stmon, self.spmon]
-#         self.pops = [self.G]
-
-
-# class PhaseMultPop(SpikingPop):
-#     def __init__(self, N=64, freq=5.):
-#         super().__init__()
-#         self.N = N
-#         self.freq = freq
-#         self.period = 1./self.freq
-#         self.symbols = {'mymax': mymax, 'mymin': mymin, 'tau': 1./self.freq}
-
-#         eqs = Equations('''
-#             dx/dt = b / tau * hertz : 1
-#             dp/dt = a / tau * hertz : 1
-#             a : 1
-#             b : 1
-#             pth : 1
-#             ''')
-
-#         reset_eqs = '''
-#             p = -0.5
-#             a = 0.
-#             '''
-
-#         wrap_reset = '''
-#             x = -0.5
-#             p = -0.5
-#             a = 1.
-#             '''
-
-#         pwrap_down = '''
-#             pth -= 1.
-#             '''
-
-#         pwrap_up = '''
-#             pth += 1.
-#             '''
-
-#         go_dormant = '''
-#             b = 0.
-#             a = 0.
-#             pth = 1.
-#             p = -2.
-#             '''
-
-#         # self.G = NeuronGroup(self.N,
-#         #                     model=eqs,
-#         #                     threshold='p>=pth and abs(pth)<=0.5',
-#         #                     reset=reset_eqs,
-#         #                     refractory=1./self.freq/2.*ms,
-#         #                     events={'wrap': 'x>=0.5', 'dormant': 'abs(b*pth)>0.5'},
-#         #                     method='euler')
-#         # self.G = NeuronGroup(self.N,
-#         #                     model=eqs,
-#         #                     threshold='p>=pth',
-#         #                     reset=reset_eqs,
-#         #                     refractory=1./self.freq/2.*ms,
-#         #                     events={'wrap': 'x>=0.5',
-#         #                             'pdown': 'pth>0.5',
-#         #                             'pup': 'pth<-0.5',
-#         #                             'dormant': 'abs(b*pth)>0.5'},
-#         #                     method='euler')
-#         self.G = NeuronGroup(self.N,
-#                             model=eqs,
-#                             threshold='p>=pth',
-#                             reset=reset_eqs,
-#                             refractory=1./self.freq/2.*ms,
-#                             events={'wrap': 'x>=0.5',
-#                                     'pdown': 'pth>0.5',
-#                                     'pup': 'pth<-0.5'},
-#                             method='euler')
-#         self.G.x = 0.
-#         self.G.p = 0.
-#         self.G.a = 1.
-#         self.G.b = 1.   # init b=1 'not dormant'
-#         self.G.pth = 0.5
-#         self.G.run_on_event('wrap', wrap_reset)
-#         self.G.run_on_event('pdown', pwrap_down)
-#         self.G.run_on_event('pup', pwrap_up)
-#         # self.G.run_on_event('dormant', go_dormant)
-
-#         self.stmon = StateMonitor(self.G, True, record=True)
-#         self.spmon = SpikeMonitor(self.G)
-#         self.br = [self.G, self.spmon, self.stmon]
-#         self.pops = [self.G]
 
 # end
