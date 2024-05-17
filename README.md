@@ -6,12 +6,12 @@ This code demonstrates the capabilities of spiking phasors for implementing Vect
 
 The following jupyter notebooks contain demonstrations.
 - `SP_VSA_Demos.ipynb`: Simple phase addition (binding), phase subtraction (unbinding), and phase multiplication (fractional binding)
-- `SP_Spatial_Memory.ipynb`: encoding different object in different locations, Fig. 6
+- `SP_Spatial_Memory.ipynb`: encoding different objects in different locations, Fig. 6
 - `SP_Functions.ipynb`: encoding functions, Fig. 8
 - `SP_integrator.ipynb`: integrating an input signal, Fig. 9
-- `SP_LDN.ipynb`: Legendre Delay Network, encoding the history of an input signal
+- `SP_LDN.ipynb`: Legendre Delay Network, encoding the history of an input signal, Fig. 10
 
-This code uses:
+This code depends on these modules:
 `brian2`, `numpy`, `matplotlib`, `tqdm`
 
 For questions, contact <jorchard@uwaterloo.ca>.
